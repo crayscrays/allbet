@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<title>Polymarket Bet</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --border: #2a2d3a;
+    --text: #e8eaf0;
+    --muted: #7b7f96;
+    --yes: #22c55e;
+    --yes-dim: rgba(34, 197, 94, 0.12);
+    --no: #ef4444;
+    --no-dim: rgba(239, 68, 68, 0.12);
+    --accent: #6366f1;
+    --accent-dim: rgba(99, 102, 241, 0.18);
+    --radius: 12px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 16px;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  #app { max-width: 460px; margin: 0 auto; }
+
+  /* ── Loading / Error states ── */
+  #loading, #error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 60vh;
+    gap: 12px;
+    color: var(--muted);
+    text-align: center;
+  }
+  .spinner {
+    width: 32px; height: 32px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Card ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 12px;
+  }
+
+  .market-question {
+    font-size: 17px;
+    font-weight: 600;
+    line-height: 1.4;
+    margin-bottom: 8px;
+  }
+
+  .market-meta {
+    font-size: 13px;
+    color: var(--muted);
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  /* ── Outcome toggle ── */
+  .outcome-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin: 18px 0;
+  }
+
+  .outcome-btn {
+    padding: 16px 12px;
+    border-radius: var(--radius);
+    border: 2px solid var(--border);
+    background: transparent;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: center;
+    color: var(--text);
+    font-size: 15px;
+    font-family: inherit;
+  }
+
+  .outcome-btn .outcome-name {
+    font-size: 18px;
+    font-weight: 700;
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  .outcome-btn .outcome-price {
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .outcome-btn.yes { border-color: var(--border); }
+  .outcome-btn.yes:hover { border-color: var(--yes); background: var(--yes-dim); }
+  .outcome-btn.yes.selected {
+    border-color: var(--yes);
+    background: var(--yes-dim);
+    color: var(--yes);
+  }
+  .outcome-btn.yes.selected .outcome-price { color: rgba(34,197,94,0.7); }
+
+  .outcome-btn.no { border-color: var(--border); }
+  .outcome-btn.no:hover { border-color: var(--no); background: var(--no-dim); }
+  .outcome-btn.no.selected {
+    border-color: var(--no);
+    background: var(--no-dim);
+    color: var(--no);
+  }
+  .outcome-btn.no.selected .outcome-price { color: rgba(239,68,68,0.7); }
+
+  /* ── Amount input ── */
+  .label {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  .amount-wrapper {
+    position: relative;
+    margin-bottom: 8px;
+  }
+
+  .amount-input {
+    width: 100%;
+    background: var(--bg);
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    font-size: 20px;
+    font-weight: 600;
+    padding: 14px 52px 14px 16px;
+    outline: none;
+    font-family: inherit;
+    transition: border-color 0.15s;
+    -webkit-appearance: none;
+  }
+  .amount-input:focus { border-color: var(--accent); }
+
+  .amount-suffix {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--muted);
+    pointer-events: none;
+  }
+
+  /* Quick-select chips */
+  .chips {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+  .chip {
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.12s;
+  }
+  .chip:hover { border-color: var(--accent); color: var(--text); }
+
+  /* ── Payout preview ── */
+  .payout-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+    color: var(--muted);
+    padding: 6px 0;
+    border-top: 1px solid var(--border);
+  }
+  .payout-row + .payout-row { border-top: none; }
+  .payout-value { color: var(--text); font-weight: 500; }
+  .payout-value.green { color: var(--yes); }
+
+  /* ── Balance bar ── */
+  .balance-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 16px;
+  }
+  .balance-amount { color: var(--text); font-weight: 600; }
+
+  /* ── Submit button ── */
+  .submit-btn {
+    width: 100%;
+    padding: 16px;
+    border-radius: var(--radius);
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    font-size: 16px;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+    letter-spacing: 0.01em;
+  }
+  .submit-btn:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
+  .submit-btn:active:not(:disabled) { transform: translateY(0); }
+  .submit-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  /* ── Success state ── */
+  #success {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 16px;
+    padding: 40px 20px;
+  }
+  .success-icon {
+    width: 64px; height: 64px;
+    background: var(--yes-dim);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 32px;
+  }
+  .success-title { font-size: 20px; font-weight: 700; }
+  .success-sub { font-size: 14px; color: var(--muted); line-height: 1.6; }
+  .success-link {
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 14px;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="loading"><div class="spinner"></div><span>Loading market…</span></div>
+  <div id="error" style="display:none"></div>
+
+  <div id="main" style="display:none">
+    <div class="card">
+      <div class="market-question" id="market-question"></div>
+      <div class="market-meta">
+        <span id="market-end"></span>
+        <span id="market-volume"></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="label">Pick your position</div>
+      <div class="outcome-row">
+        <button class="outcome-btn yes" id="btn-yes">
+          <span class="outcome-name" id="yes-name">Yes</span>
+          <span class="outcome-price" id="yes-price">—¢</span>
+        </button>
+        <button class="outcome-btn no" id="btn-no">
+          <span class="outcome-name" id="no-name">No</span>
+          <span class="outcome-price" id="no-price">—¢</span>
+        </button>
+      </div>
+
+      <div class="label">Amount</div>
+      <div class="amount-wrapper">
+        <input
+          class="amount-input"
+          id="amount-input"
+          type="number"
+          inputmode="decimal"
+          min="1"
+          step="1"
+          placeholder="10"
+          oninput="onAmountChange()"
+        />
+        <span class="amount-suffix">USDC</span>
+      </div>
+      <div class="chips">
+        <button class="chip" onclick="setAmount(5)">$5</button>
+        <button class="chip" onclick="setAmount(10)">$10</button>
+        <button class="chip" onclick="setAmount(25)">$25</button>
+        <button class="chip" onclick="setAmount(50)">$50</button>
+        <button class="chip" id="chip-max" onclick="setAmount(null)">Max</button>
+      </div>
+
+      <div class="balance-bar">
+        <span>Available balance</span>
+        <span class="balance-amount" id="balance-display">—</span>
+      </div>
+
+      <div class="payout-row">
+        <span>Shares</span>
+        <span class="payout-value" id="shares-display">—</span>
+      </div>
+      <div class="payout-row">
+        <span>Potential payout</span>
+        <span class="payout-value green" id="payout-display">—</span>
+      </div>
+    </div>
+
+    <button class="submit-btn" id="submit-btn" onclick="placeBet()" disabled>
+      Select outcome to continue
+    </button>
+  </div>
+
+  <div id="success">
+    <div class="success-icon">✓</div>
+    <div class="success-title">Bet placed!</div>
+    <div class="success-sub" id="success-sub"></div>
+    <a id="polymarket-link" class="success-link" target="_blank">View on Polymarket →</a>
+  </div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────────
+const params = new URLSearchParams(location.search);
+const MARKET_ID  = params.get('market');
+const SENDER_ID  = params.get('sender');
+const GROUP_ID   = params.get('group');
+const CHANNEL_ID = params.get('channel');
+
+let market = null;
+let userBalance = 0;
+let selectedOutcome = null;
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function getAuthHeader() {
+  // BevoContext is injected by the Bevo WebView before the page loads
+  const ctx = window.BevoContext || {};
+  return ctx.authToken ? `Bearer ${ctx.authToken}` : '';
+}
+
+function show(id) { document.getElementById(id).style.display = 'flex'; }
+function hide(id) { document.getElementById(id).style.display = 'none'; }
+function showError(msg) {
+  const el = document.getElementById('error');
+  el.innerHTML = `<div style="font-size:18px">⚠️</div><div>${msg}</div>`;
+  hide('loading'); show('error');
+}
+
+function formatDate(iso) {
+  try {
+    return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  } catch { return iso; }
+}
+function formatVolume(v) {
+  if (v >= 1e6) return `$${(v/1e6).toFixed(1)}M vol`;
+  if (v >= 1e3) return `$${(v/1e3).toFixed(0)}K vol`;
+  return `$${v.toFixed(0)} vol`;
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+async function init() {
+  if (!MARKET_ID) { showError('No market specified.'); return; }
+
+  try {
+    // Wait for BevoContext (injected async)
+    await waitForContext();
+
+    const [marketRes, balanceRes] = await Promise.all([
+      fetch(`/api/market/${encodeURIComponent(MARKET_ID)}`, {
+        headers: { Authorization: getAuthHeader() }
+      }),
+      SENDER_ID
+        ? fetch(`/api/balance?sender=${encodeURIComponent(SENDER_ID)}`, {
+            headers: { Authorization: getAuthHeader() }
+          })
+        : Promise.resolve(null)
+    ]);
+
+    if (!marketRes.ok) throw new Error('Failed to load market data');
+    market = await marketRes.json();
+
+    if (balanceRes && balanceRes.ok) {
+      const data = await balanceRes.json();
+      userBalance = data.balance ?? 0;
+    }
+
+    render();
+    hide('loading');
+    show('main');
+  } catch (err) {
+    showError(err.message || 'Failed to load market');
+  }
+}
+
+function waitForContext() {
+  return new Promise(resolve => {
+    if (window.BevoContext) { resolve(); return; }
+    window.addEventListener('bevo:context-updated', resolve, { once: true });
+    // Timeout fallback — proceed without context after 3s
+    setTimeout(resolve, 3000);
+  });
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function render() {
+  document.getElementById('market-question').textContent = market.question;
+  document.getElementById('market-end').textContent = 'Ends ' + formatDate(market.endDate);
+  document.getElementById('market-volume').textContent = formatVolume(market.volume);
+  document.getElementById('balance-display').textContent = `$${userBalance.toFixed(2)} USDC`;
+
+  const [first, second] = market.outcomes;
+  if (first) {
+    document.getElementById('yes-name').textContent = first.name;
+    document.getElementById('yes-price').textContent = Math.round(first.price * 100) + '¢';
+    document.getElementById('btn-yes').onclick = () => selectOutcome(first.name);
+  }
+  if (second) {
+    document.getElementById('no-name').textContent = second.name;
+    document.getElementById('no-price').textContent = Math.round(second.price * 100) + '¢';
+    document.getElementById('btn-no').onclick = () => selectOutcome(second.name);
+  }
+
+  document.getElementById('chip-max').textContent = `Max ($${userBalance.toFixed(0)})`;
+}
+
+// ── Interactions ──────────────────────────────────────────────────────────────
+function selectOutcome(name) {
+  selectedOutcome = name;
+  document.getElementById('btn-yes').classList.toggle('selected', name === 'YES');
+  document.getElementById('btn-no').classList.toggle('selected', name === 'NO');
+  updateSubmitState();
+  computePayout();
+}
+
+function setAmount(value) {
+  const max = Math.floor(userBalance);
+  document.getElementById('amount-input').value = value === null ? max : Math.min(value, max);
+  computePayout();
+  updateSubmitState();
+}
+
+function onAmountChange() {
+  computePayout();
+  updateSubmitState();
+}
+
+function computePayout() {
+  const amountEl = document.getElementById('amount-input');
+  const amount = parseFloat(amountEl.value) || 0;
+  if (!market || !selectedOutcome || amount <= 0) {
+    document.getElementById('shares-display').textContent = '—';
+    document.getElementById('payout-display').textContent = '—';
+    return;
+  }
+  const outcome = market.outcomes.find(o => o.name.toLowerCase() === selectedOutcome.toLowerCase());
+  if (!outcome) return;
+  const shares = amount / outcome.price;
+  document.getElementById('shares-display').textContent = shares.toFixed(4);
+  document.getElementById('payout-display').textContent = `$${shares.toFixed(2)} USDC`;
+}
+
+function updateSubmitState() {
+  const btn = document.getElementById('submit-btn');
+  const amount = parseFloat(document.getElementById('amount-input').value) || 0;
+  if (!selectedOutcome) {
+    btn.textContent = 'Select outcome to continue';
+    btn.disabled = true;
+  } else if (amount <= 0) {
+    btn.textContent = 'Enter an amount';
+    btn.disabled = true;
+  } else if (amount > userBalance) {
+    btn.textContent = 'Insufficient balance';
+    btn.disabled = true;
+  } else {
+    btn.textContent = `Bet ${selectedOutcome} — $${amount.toFixed(2)} USDC`;
+    btn.disabled = false;
+  }
+}
+
+// ── Place bet ─────────────────────────────────────────────────────────────────
+async function placeBet() {
+  const btn = document.getElementById('submit-btn');
+  const amount = parseFloat(document.getElementById('amount-input').value);
+
+  btn.disabled = true;
+  btn.textContent = 'Placing bet…';
+
+  try {
+    const res = await fetch('/api/place-bet', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: getAuthHeader()
+      },
+      body: JSON.stringify({
+        conditionId: MARKET_ID,
+        outcome: selectedOutcome,
+        amountUsdc: amount,
+        senderId: SENDER_ID,
+        groupId: GROUP_ID,
+        channelId: CHANNEL_ID
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Bet failed');
+
+    const outcome = market.outcomes.find(o => o.name === selectedOutcome);
+    const shares = outcome ? amount / outcome.price : amount;
+    document.getElementById('success-sub').textContent =
+      `$${amount.toFixed(2)} USDC on ${selectedOutcome} · ${shares.toFixed(2)} shares · max payout $${shares.toFixed(2)}`;
+    document.getElementById('polymarket-link').href =
+      `https://polymarket.com/event/${market.slug}`;
+
+    hide('main');
+    show('success');
+  } catch (err) {
+    btn.disabled = false;
+    updateSubmitState();
+    alert(err.message || 'Failed to place bet. Please try again.');
+  }
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
